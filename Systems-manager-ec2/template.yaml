@@ -1,0 +1,98 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Template to Create an EC2 instance in a VPC
+
+Parameters:
+  VpcId:
+    Type: String
+    Description: VPC id
+    Default: vpc-063f8b21a548c037c
+  ImageId:
+    Type: String
+    Description: 'Linux 2 AMI for London eu-west2 Region'
+    Default: ami-084e8c05825742534
+  InstanceType:
+    Type: String
+    Description: Choosing  t2 micro because it is free
+    Default: t2.micro
+  KeyName:
+    Description: SSH Keypair to login to the instance
+    Type: AWS::EC2::KeyPair::KeyName
+    Default: ec2-key
+  SubnetId:
+    Type: String
+    Description: Subnet in which to launch an EC2
+    Default: subnet-002fb04124cdabd8d
+
+Resources:
+  #####################################
+  # ec2 role
+  #####################################
+  IamRole:
+    Type: "AWS::IAM::Role"
+    Properties:
+      RoleName: "Ec2RoleForSSM"
+      Description: "EC2 IAM role for SSM access"
+      AssumeRolePolicyDocument:
+        Version: "2012-10-17"
+        Statement:
+          - Effect: "Allow"
+            Principal:
+              Service:
+                - "ec2.amazonaws.com"
+            Action:
+              - "sts:AssumeRole"
+      ManagedPolicyArns:
+        - "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+  Ec2InstanceProfile:
+    Type: "AWS::IAM::InstanceProfile"
+    Properties:
+      InstanceProfileName: "Ec2RoleForSSM"
+      Roles:
+        - Ref: "IamRole"
+  #####################################
+  # EC2 Instance
+  #####################################
+  DemoInstance:
+    Type: 'AWS::EC2::Instance'
+    Properties:
+      ImageId: !Ref ImageId
+      InstanceType: !Ref InstanceType
+      KeyName: !Ref KeyName
+      SubnetId: !Ref SubnetId
+      IamInstanceProfile: !Ref Ec2InstanceProfile
+      SecurityGroupIds:
+        - !Ref DemoSecurityGroup
+      UserData: !Base64 |
+        #!/bin/bash -ex
+        yum update -y
+      Tags:
+        - Key: Name
+          Value: DemoInstance
+  #####################################
+  # Security group
+  #####################################
+  DemoSecurityGroup:
+    Type: 'AWS::EC2::SecurityGroup'
+    Properties:
+      VpcId: !Ref VpcId
+      GroupDescription: SG to allow SSH access via port 22
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: '22'
+          ToPort: '22'
+          CidrIp: '0.0.0.0/0'
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 443
+          ToPort: 443
+          CidrIp: 0.0.0.0/0
+      Tags:
+        - Key: Name
+          Value: EC2-SG
+Outputs:
+  DemoInstanceId:
+    Description: Instance Id
+    Value: !Ref DemoInstance
